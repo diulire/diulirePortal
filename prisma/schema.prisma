@@ -1,0 +1,42 @@
+// 数据库连接配置
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 客户端生成器配置
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 用户模型
+model User {
+  id           String     @id @default(uuid())
+  username     String     @unique
+  passwordHash String
+  role         String     @default("user") // "user" 代表普通用户，"admin" 代表超级管理员
+  createdAt    DateTime   @default(now())
+  categories   Category[]
+}
+
+// 分类模型
+model Category {
+  id        String     @id @default(uuid())
+  name      String
+  order     Int        @default(0) // 用于自定义拖动排序
+  userId    String?    // 外键：若为 null 则表示超级管理员配置的首页公共分类
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookmarks Bookmark[]
+}
+
+// 书签模型
+model Bookmark {
+  id          String   @id @default(uuid())
+  title       String
+  url         String
+  description String?
+  favicon     String?
+  order       Int      @default(0) // 用于分类内部自定义拖动排序
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+}
