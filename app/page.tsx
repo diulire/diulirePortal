@@ -42,6 +42,7 @@ export default function HomePage() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [user, setUser] = useState<User | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchEngine, setSearchEngine] = useState(SEARCH_ENGINES[0]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
@@ -732,8 +733,17 @@ export default function HomePage() {
       {/* 顶部控制栏 */}
       <header className="home-header">
         <div className="logo-section">
-          <span className="gradient-logo">HubPortal</span>
-          <span className="tagline">你的优雅导航书签</span>
+          <button
+            className="sidebar-toggle-btn"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            title={isSidebarOpen ? "收起分类" : "展开分类"}
+          >
+            {isSidebarOpen ? "✕" : "☰"}
+          </button>
+          <div className="logo-text-wrapper">
+            <span className="gradient-logo">HubPortal</span>
+            <span className="tagline">你的优雅导航书签</span>
+          </div>
         </div>
 
         <div className="action-section">
@@ -835,8 +845,13 @@ export default function HomePage() {
 
       {/* 主体核心：左右双栏布局 */}
       <div className="layout-body-wrapper">
+        {/* 移动端侧边栏遮罩 */}
+        {isSidebarOpen && (
+          <div className="sidebar-backdrop" onClick={() => setIsSidebarOpen(false)} />
+        )}
+
         {/* 左侧侧边栏 */}
-        <aside className="sidebar-wrapper glass-panel">
+        <aside className={`sidebar-wrapper glass-panel ${isSidebarOpen ? "mobile-open" : ""}`}>
           <div className="sidebar-header-sticky">
             <h3 className="sidebar-title">🧭 分类导航</h3>
             
@@ -893,7 +908,10 @@ export default function HomePage() {
                     className={`sidebar-item ${
                       draggedCatId === cat.id ? "dragging" : ""
                     } ${activeDragOverCatId === cat.id && draggedCatId ? "drag-over" : ""}`}
-                    onClick={() => handleScrollToCategory(cat.id)}
+                    onClick={() => {
+                      handleScrollToCategory(cat.id);
+                      setIsSidebarOpen(false);
+                    }}
                   >
                     <span className="sidebar-item-dot">📁</span>
                     <span className="sidebar-item-name" title={cat.name}>{cat.name}</span>
@@ -906,7 +924,13 @@ export default function HomePage() {
           )}
           
           {isEditMode && !filterQuery.trim() && (
-            <button onClick={() => handleOpenCatModal()} className="add-category-sidebar-btn">
+            <button
+              onClick={() => {
+                handleOpenCatModal();
+                setIsSidebarOpen(false);
+              }}
+              className="add-category-sidebar-btn"
+            >
               ➕ 添加新分类 {editPublicMode ? "(公共)" : "(个人)"}
             </button>
           )}
@@ -1363,7 +1387,52 @@ export default function HomePage() {
 
         .logo-section {
           display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .logo-text-wrapper {
+          display: flex;
           flex-direction: column;
+        }
+
+        /* 移动端侧边栏切换按钮，默认在 PC 隐藏 */
+        .sidebar-toggle-btn {
+          display: none;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-color);
+          color: var(--text-primary);
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          cursor: pointer;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.25rem;
+          transition: all 0.2s ease;
+          font-family: inherit;
+        }
+
+        .sidebar-toggle-btn:hover {
+          background: rgba(99, 102, 241, 0.08);
+          border-color: var(--accent-primary);
+        }
+
+        /* 移动端侧边栏弹出时的遮罩蒙版 */
+        .sidebar-backdrop {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.45);
+          backdrop-filter: blur(5px);
+          -webkit-backdrop-filter: blur(5px);
+          z-index: 190;
+          animation: sidebarFadeIn 0.2s ease-out;
+        }
+
+        @keyframes sidebarFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
 
         .gradient-logo {
@@ -2565,37 +2634,87 @@ export default function HomePage() {
 
         /* 响应式媒体查询 */
         @media (max-width: 900px) {
-          .home-container {
-            height: auto;
-            overflow: visible;
+          /* 唤醒 Hamburger 按钮 */
+          .sidebar-toggle-btn {
+            display: flex;
+          }
+          
+          .sidebar-backdrop {
+            display: block;
           }
 
-          .layout-body-wrapper {
-            flex-direction: column;
-            gap: 20px;
-            height: auto;
-            overflow: visible;
+          .home-header {
+            padding: 12px 0;
           }
 
-          .sidebar-wrapper {
-            width: 100%;
-            position: relative;
-            top: 0;
-            height: auto;
-            max-height: 260px;
-            overflow-y: auto;
-            border-bottom: 1px solid var(--border-color);
-          }
-
-          .content-wrapper {
-            height: auto;
-            overflow: visible;
-          }
-
-          .sidebar-menu {
-            flex-direction: row;
-            flex-wrap: wrap;
+          .action-section {
             gap: 8px;
+          }
+
+          /* 搜索引擎 Tab 自适应横向拖动滑轨 */
+          .search-engine-tabs {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            width: 100%;
+            padding: 4px 8px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Firefox */
+          }
+          
+          .search-engine-tabs::-webkit-scrollbar {
+            display: none; /* Chrome/Safari */
+          }
+
+          .engine-tab {
+            flex-shrink: 0;
+            padding: 6px 14px;
+          }
+
+          /* 侧边栏摇身变为抽屉，默认为 translateX(-100%) 折叠隐藏 */
+          .sidebar-wrapper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            height: 100vh !important;
+            width: 280px;
+            z-index: 200;
+            border-radius: 0 20px 20px 0;
+            transform: translateX(-100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.25);
+            border-left: none;
+          }
+
+          /* 展开时滑出抽屉 */
+          .sidebar-wrapper.mobile-open {
+            transform: translateX(0);
+          }
+
+          /* 双栏在移动端下合并宽度，去除多余间距 */
+          .layout-body-wrapper {
+            gap: 0;
+          }
+          
+          .content-wrapper {
+            padding-right: 0;
+          }
+
+          /* 书签卡片网格尺寸调整，移动端自动紧凑 */
+          .bookmarks-grid {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+            padding: 16px 8px;
+          }
+
+          .bookmark-grid-link {
+            padding: 10px 12px;
+            gap: 8px;
+          }
+
+          .bookmark-grid-favicon {
+            width: 20px;
+            height: 20px;
           }
 
           .sidebar-item:hover {
