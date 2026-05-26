@@ -1,6 +1,6 @@
 // 数据库连接配置
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

@@ -14,7 +14,7 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const { name } = await req.json();
+    const { name, isPublic } = await req.json();
 
     if (!name || name.trim() === "") {
       return NextResponse.json({ error: "分类名称不能为空" }, { status: 400 });
@@ -37,9 +37,53 @@ export async function PUT(
       return NextResponse.json({ error: "无权修改他人分类" }, { status: 403 });
     }
 
+    // 构造更新数据
+    const updateData: any = {
+      name: name.trim(),
+    };
+
+    // 处理公开/私有状态的转换
+    if (isPublic !== undefined) {
+      const wasPublic = category.userId === null;
+      if (isPublic !== wasPublic) {
+        // 只有管理员能更改分类的公开属性
+        if (payload.role !== "admin") {
+          return NextResponse.json({ error: "无权更改分类的公开属性" }, { status: 403 });
+        }
+
+        if (isPublic) {
+          // 私有转公共：userId 设为 null，并计算公共分类中最大的 order
+          const lastCategory = await prisma.category.findFirst({
+            where: {
+              userId: null,
+            },
+            orderBy: {
+              order: "desc",
+            },
+          });
+          const nextOrder = lastCategory ? lastCategory.order + 1 : 0;
+          updateData.userId = null;
+          updateData.order = nextOrder;
+        } else {
+          // 公共转私有：userId 设为当前管理员用户的 id，并计算该管理员私有分类中最大的 order
+          const lastCategory = await prisma.category.findFirst({
+            where: {
+              userId: payload.userId,
+            },
+            orderBy: {
+              order: "desc",
+            },
+          });
+          const nextOrder = lastCategory ? lastCategory.order + 1 : 0;
+          updateData.userId = payload.userId;
+          updateData.order = nextOrder;
+        }
+      }
+    }
+
     const updatedCategory = await prisma.category.update({
       where: { id },
-      data: { name: name.trim() },
+      data: updateData,
     });
 
     return NextResponse.json({
