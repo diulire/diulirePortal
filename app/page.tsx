@@ -105,6 +105,9 @@ export default function HomePage() {
   const [activeDragOverCatId, setActiveDragOverCatId] = useState<string | null>(null);
   const [activeDragOverBmId, setActiveDragOverBmId] = useState<string | null>(null);
 
+  // 批量操作选中的书签 ID
+  const [selectedBmIds, setSelectedBmIds] = useState<string[]>([]);
+
   // 弹窗表单 DOM 引用
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -177,6 +180,7 @@ export default function HomePage() {
       setUser(null);
       setIsEditMode(false);
       setEditPublicMode(false);
+      setSelectedBmIds([]); // 清空批量选择
       showToast("已成功退出登录", "success");
       // 重新拉取公共导航
       fetchUserAndData();
@@ -390,6 +394,37 @@ export default function HomePage() {
           }
         } catch (e) {
           showToast("网络请求失败", "error");
+        }
+      },
+    });
+  };
+
+  // 批量删除书签
+  const handleBatchDeleteBookmarks = () => {
+    if (selectedBmIds.length === 0) return;
+
+    setConfirmModal({
+      show: true,
+      title: "批量删除书签",
+      message: `确定要删除选中的 ${selectedBmIds.length} 个书签吗？该操作不可恢复！`,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, show: false }));
+        try {
+          const res = await fetch("/api/bookmarks", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: selectedBmIds }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            showToast(data.error || "批量删除书签失败", "error");
+          } else {
+            showToast(data.message || `成功删除 ${data.count} 个书签`, "success");
+            setSelectedBmIds([]);
+            fetchUserAndData();
+          }
+        } catch (e) {
+          showToast("网络请求失败，请稍后重试", "error");
         }
       },
     });
@@ -762,7 +797,10 @@ export default function HomePage() {
               <button
                 onClick={() => {
                   setIsEditMode(!isEditMode);
-                  if (isEditMode) setEditPublicMode(false);
+                  if (isEditMode) {
+                    setEditPublicMode(false);
+                    setSelectedBmIds([]); // 退出编辑模式时清空批量选择
+                  }
                 }}
                 className={`header-btn ${isEditMode ? "active" : ""}`}
               >
@@ -897,17 +935,28 @@ export default function HomePage() {
                     draggable={canEditThisCat && !draggedBmId && !isFiltered}
                     onDragStart={(e) => handleCatDragStart(e, cat.id)}
                     onDragOver={(e) => {
-                      if (draggedCatId && !isFiltered) handleCatDragOver(e, cat.id);
+                      if (draggedCatId && !isFiltered) {
+                        handleCatDragOver(e, cat.id);
+                      } else if (draggedBmId && canEditThisCat && !isFiltered) {
+                        // 支持右侧书签拖拽到左侧分类
+                        e.preventDefault();
+                        setActiveDragOverCatId(cat.id);
+                      }
                     }}
                     onDrop={(e) => {
-                      if (draggedCatId && !isFiltered) handleCatDrop(e, cat.id);
+                      if (draggedCatId && !isFiltered) {
+                        handleCatDrop(e, cat.id);
+                      } else if (draggedBmId && canEditThisCat && !isFiltered) {
+                        // 书签拖放到侧边栏分类
+                        handleBmDropOnCat(e, cat.id);
+                      }
                     }}
                     onDragLeave={() => {
                       if (activeDragOverCatId === cat.id) setActiveDragOverCatId(null);
                     }}
                     className={`sidebar-item ${
                       draggedCatId === cat.id ? "dragging" : ""
-                    } ${activeDragOverCatId === cat.id && draggedCatId ? "drag-over" : ""}`}
+                    } ${activeDragOverCatId === cat.id && (draggedCatId || (draggedBmId && canEditThisCat)) ? "drag-over" : ""}`}
                     onClick={() => {
                       handleScrollToCategory(cat.id);
                       setIsSidebarOpen(false);
@@ -1056,8 +1105,26 @@ export default function HomePage() {
                             }}
                             className={`bookmark-grid-item glass-card ${
                               draggedBmId === bm.id ? "dragging" : ""
-                            } ${activeDragOverBmId === bm.id && !isFiltered ? "drag-over" : ""}`}
+                            } ${activeDragOverBmId === bm.id && !isFiltered ? "drag-over" : ""} ${
+                              selectedBmIds.includes(bm.id) ? "bm-selected" : ""
+                            } ${canEditThisBm && !isFiltered ? "has-checkbox" : ""}`}
                           >
+                            {canEditThisBm && !isFiltered && (
+                              <div className="bm-grid-select-wrapper" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedBmIds.includes(bm.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedBmIds((prev) => [...prev, bm.id]);
+                                    } else {
+                                      setSelectedBmIds((prev) => prev.filter((id) => id !== bm.id));
+                                    }
+                                  }}
+                                  className="bm-grid-select-checkbox"
+                                />
+                              </div>
+                            )}
                             <a
                               href={bm.url}
                               target="_blank"
@@ -1139,6 +1206,24 @@ export default function HomePage() {
           </footer>
         </main>
       </div>
+
+      {/* 批量操作悬浮条 */}
+      {selectedBmIds.length > 0 && (
+        <div className="batch-actions-bar glass-panel glow-border">
+          <div className="batch-actions-info">
+            <span className="batch-count-badge">{selectedBmIds.length}</span>
+            <span>个书签已选中</span>
+          </div>
+          <div className="batch-actions-btns">
+            <button onClick={handleBatchDeleteBookmarks} className="batch-btn delete-btn">
+              🗑️ 批量删除
+            </button>
+            <button onClick={() => setSelectedBmIds([])} className="batch-btn cancel-btn">
+              取消选择
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ==================== 确认弹窗 ==================== */}
       {confirmModal.show && (
@@ -2720,6 +2805,120 @@ export default function HomePage() {
           .sidebar-item:hover {
             transform: none;
           }
+        }
+
+        /* 批量删除悬浮控制条样式 */
+        .batch-actions-bar {
+          position: fixed;
+          bottom: 30px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 999;
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          padding: 12px 24px;
+          border-radius: 20px;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+          border: 1px solid var(--accent-primary);
+          animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes slideUp {
+          from {
+            bottom: -60px;
+            opacity: 0;
+            transform: translateX(-50%) scale(0.9);
+          }
+          to {
+            bottom: 30px;
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+          }
+        }
+
+        .batch-actions-info {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: var(--text-primary);
+        }
+
+        .batch-count-badge {
+          background: var(--accent-gradient);
+          color: white;
+          padding: 2px 8px;
+          border-radius: 20px;
+          font-weight: 700;
+          font-size: 0.85rem;
+        }
+
+        .batch-actions-btns {
+          display: flex;
+          gap: 10px;
+        }
+
+        .batch-btn {
+          padding: 6px 14px;
+          border-radius: 10px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          cursor: pointer;
+          border: 1px solid transparent;
+          transition: all 0.2s ease;
+        }
+
+        .batch-btn.delete-btn {
+          background: #ef4444;
+          color: white;
+        }
+
+        .batch-btn.delete-btn:hover {
+          background: #dc2626;
+          box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+        }
+
+        .batch-btn.cancel-btn {
+          background: var(--bg-tertiary);
+          color: var(--text-secondary);
+          border-color: var(--border-color);
+        }
+
+        .batch-btn.cancel-btn:hover {
+          background: var(--border-color);
+          color: var(--text-primary);
+        }
+
+        /* 复选框包裹层绝对定位，卡片内容左侧偏移以防遮挡 favicon */
+        .bm-grid-select-wrapper {
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 10;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .bm-grid-select-checkbox {
+          width: 16px;
+          height: 16px;
+          cursor: pointer;
+          accent-color: var(--accent-primary);
+        }
+
+        .bookmark-grid-item.has-checkbox .bookmark-grid-link {
+          padding-left: 36px;
+        }
+
+        /* 选中高亮及微凹缩放效果 */
+        .bookmark-grid-item.bm-selected {
+          border-color: var(--accent-primary) !important;
+          box-shadow: 0 0 10px rgba(99, 102, 241, 0.1) !important;
+          transform: scale(0.99);
         }
       `}</style>
     </div>
