@@ -99,3 +99,5 @@ npx prisma db push
 - `/lib/crypto.ts` —— 密码加盐散列辅助
 - `/lib/auth.ts` —— 基于 jose 的 JWT 生成及 Cookie 拦截验证
 - `/switch-to-postgres.js` —— 生产环境 PostgreSQL 一键无缝切换脚本
+
+<!-- Git Integration Test: Auto Trigger Deployment -->
