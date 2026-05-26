@@ -13,3 +13,11 @@ if (content.includes('provider = "postgresql"')) {
 } else {
   console.log("ℹ️ Prisma 数据库 Provider 已经是 sqlite，无需修改。");
 }
+
+// 恢复重命名 .env 供本地开发使用
+const envPath = path.join(__dirname, ".env");
+const envBakPath = path.join(__dirname, ".env.bak");
+if (fs.existsSync(envBakPath)) {
+  fs.renameSync(envBakPath, envPath);
+  console.log("✅ 已将 .env.bak 恢复为 .env，本地 SQLite 开发环境已就绪！");
+}

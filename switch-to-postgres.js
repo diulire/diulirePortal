@@ -13,3 +13,11 @@ if (content.includes('provider = "sqlite"')) {
 } else {
   console.log("ℹ️ Prisma 数据库 Provider 已经是 postgresql，无需修改。");
 }
+
+// 临时重命名 .env，防止 Vercel 部署上传本地 SQLite 连接串导致线上 500
+const envPath = path.join(__dirname, ".env");
+const envBakPath = path.join(__dirname, ".env.bak");
+if (fs.existsSync(envPath)) {
+  fs.renameSync(envPath, envBakPath);
+  console.log("✅ 已将 .env 临时重命名为 .env.bak，以避开 Vercel CLI 的 env 上传覆盖");
+}
